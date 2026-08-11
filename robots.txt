@@ -1,0 +1,18 @@
+# 풀하우스 엔터테인먼트 — robots.txt
+User-agent: *
+Allow: /
+Disallow: /api/
+
+# 네이버
+User-agent: Yeti
+Allow: /
+
+# 다음
+User-agent: Daum
+Allow: /
+
+# 구글 이미지
+User-agent: Googlebot-Image
+Allow: /assets/img/
+
+Sitemap: https://fullhousekorea.co.kr/sitemap.xml
