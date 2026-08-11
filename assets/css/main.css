@@ -431,6 +431,11 @@ a.ccase:hover .ccase__ph img { transform: scale(1.05); }
 .form-msg { padding: 15px 18px; border-radius: var(--r-sm); font-size: 0.9rem; font-weight: 600; display: none; }
 .form-msg.is-ok { display: block; background: rgba(60, 200, 120, 0.12); border: 1px solid rgba(60, 200, 120, 0.4); color: #6ee7a8; }
 .form-msg.is-err { display: block; background: var(--accent-soft); border: 1px solid var(--accent); color: var(--accent-2); }
+/* 메일로 보내달라는 안내. 실패가 아니라 대체 경로이므로 경고색을 쓰지 않는다. */
+.form-msg.is-mail { display: block; background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.18); color: var(--fg); font-weight: 500; line-height: 1.55; }
+.form-msg.is-mail b { font-weight: 700; }
+.form-msg.is-mail small { display: block; margin-top: .5rem; opacity: .65; font-weight: 400; }
+.form-msg.is-mail .btn { vertical-align: middle; }
 .hp { position: absolute !important; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; border: 0; opacity: 0; }
 
 .contact-grid { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 0.8fr); gap: clamp(32px, 5vw, 72px); align-items: start; }

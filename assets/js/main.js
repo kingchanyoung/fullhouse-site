@@ -136,12 +136,89 @@
   }
 
   /* ------------------------------------------------------- forms ------ */
+
+  /* 입력값을 사람이 읽을 수 있는 메일 본문으로 만든다.
+     폼 백엔드가 아직 없거나 장애일 때, 적어놓은 내용이 날아가지 않게 하는 안전망이다.
+     name 대신 label 텍스트를 쓰는 이유: 받는 사람이 inquiry_type 이 아니라
+     '문의 유형' 으로 읽어야 하기 때문. */
+  function formToMail(form) {
+    var lines = [];
+    var seen = {};
+    Array.prototype.forEach.call(form.elements, function (el) {
+      if (!el.name || el.type === 'submit' || el.type === 'button') return;
+      if (el.classList.contains('hp')) return;                 // 봇 차단용 숨김칸
+      if (el.type === 'hidden') return;                        // 폼 종류·제목 등 내부값 (제목에 이미 들어감)
+      if (el.type === 'checkbox' && el.name === 'agree') return;
+      if ((el.type === 'checkbox' || el.type === 'radio') && !el.checked) return;
+      var v = (el.value || '').trim();
+      if (!v) return;
+
+      var label = '';
+      var lab = el.id ? form.querySelector('label[for="' + el.id + '"]') : null;
+      if (lab) label = lab.textContent.replace(/\*/g, '').trim();
+      if (!label) label = el.name;
+
+      if (seen[label]) { lines[seen[label] - 1] += ', ' + v; return; }
+      lines.push(label + ': ' + v);
+      seen[label] = lines.length;
+    });
+    return lines.join('\n');
+  }
+
+  function mailFallback(form, msg, reason) {
+    var to = form.dataset.mail || 'ask@fullhousekorea.com';
+    var subjEl = form.querySelector('input[name="subject"]');
+    var subject = subjEl ? subjEl.value : '홈페이지 문의';
+    var body = formToMail(form);
+    var href = 'mailto:' + to +
+      '?subject=' + encodeURIComponent(subject) +
+      '&body=' + encodeURIComponent(body + '\n\n---\n홈페이지 문의 폼에서 작성됨');
+
+    if (msg) {
+      msg.className = 'form-msg is-mail';
+      msg.innerHTML =
+        '<b>메일 앱으로 보내주세요.</b><br>' +
+        '작성하신 내용을 그대로 담았습니다. 아래를 누르면 메일이 열리고, 보내기만 누르시면 됩니다.<br>' +
+        '<a class="btn btn--sm" href="' + href + '" style="margin-top:.6rem;display:inline-block">메일로 보내기</a> ' +
+        '<button type="button" class="btn btn--sm btn--ghost js-copy" style="margin-top:.6rem">내용 복사</button>' +
+        '<br><small>직접 보내실 주소: ' + to + '</small>';
+
+      var copyBtn = msg.querySelector('.js-copy');
+      if (copyBtn) {
+        copyBtn.addEventListener('click', function () {
+          var text = subject + '\n\n' + body;
+          var done = function () { copyBtn.textContent = '복사됨'; };
+          if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(text).then(done, done);
+          } else {
+            var ta = document.createElement('textarea');
+            ta.value = text; document.body.appendChild(ta); ta.select();
+            try { document.execCommand('copy'); } catch (e) {}
+            document.body.removeChild(ta); done();
+          }
+        });
+      }
+    }
+    if (window.console && reason) console.warn('폼 전송 실패 → 메일 안내로 전환:', reason);
+  }
+
   document.querySelectorAll('form[data-ajax]').forEach(function (form) {
     var msg = form.querySelector('.form-msg');
     form.addEventListener('submit', function (e) {
       e.preventDefault();
       var btn = form.querySelector('button[type="submit"]');
       var label = btn ? btn.textContent : '';
+
+      /* 폼 백엔드가 아직 연결되지 않았으면(키 미발급) 곧바로 메일 안내로 간다.
+         빈 키로 요청을 보내봐야 실패만 하고 사용자는 이유를 모른다. */
+      var keyEl = form.querySelector('input[name="access_key"]');
+      var notWired = !form.getAttribute('action') || (keyEl && !keyEl.value);
+      if (notWired) {
+        if (!form.reportValidity()) return;
+        mailFallback(form, msg, '백엔드 미연결');
+        return;
+      }
+
       if (btn) { btn.disabled = true; btn.textContent = '전송 중…'; }
       if (msg) msg.className = 'form-msg';
 
@@ -168,14 +245,8 @@
           }
         })
         .catch(function (err) {
-          if (msg) {
-            msg.className = 'form-msg is-err';
-            msg.innerHTML =
-              (err.message || '전송에 실패했습니다.') +
-              ' 잠시 후 다시 시도하시거나 <a href="mailto:' +
-              (form.dataset.mail || 'ask@fullhousekorea.com') +
-              '">메일로 문의</a>해 주세요.';
-          }
+          /* 전송이 실패해도 작성한 내용은 잃지 않게 메일 경로로 넘긴다 */
+          mailFallback(form, msg, err.message);
         })
         .finally(function () {
           if (btn) { btn.disabled = false; btn.textContent = label; }
