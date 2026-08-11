@@ -222,12 +222,31 @@
       if (btn) { btn.disabled = true; btn.textContent = '전송 중…'; }
       if (msg) msg.className = 'form-msg';
 
-      fetch(form.action, {
-        method: 'POST',
-        body: new FormData(form),
-        headers: { Accept: 'application/json' }   /* Formspree 는 이게 없으면 리다이렉트로 응답 */
-      })
-        .then(function (r) { return r.json().catch(function () { return {}; }); })
+      /* 외부 폼 API 는 JSON 을 기대한다. multipart 로 보내면 서비스에 따라
+         JSON 이 아니라 HTML 오류 페이지가 돌아와 성공 판정이 통째로 깨진다.
+         자체 PHP 로 되돌릴 때만 폼 인코딩을 쓴다. */
+      var fd = new FormData(form);
+      var body, headers;
+      if (form.dataset.encoding === 'json') {
+        var payload = {};
+        fd.forEach(function (v, k) {
+          if (k in payload) {                       /* 체크박스처럼 같은 이름이 여러 개면 합친다 */
+            payload[k] = payload[k] + ', ' + v;
+          } else { payload[k] = v; }
+        });
+        body = JSON.stringify(payload);
+        headers = { 'Content-Type': 'application/json', Accept: 'application/json' };
+      } else {
+        body = fd;
+        headers = { Accept: 'application/json' };   /* Formspree 는 이게 없으면 리다이렉트로 응답 */
+      }
+
+      fetch(form.action, { method: 'POST', body: body, headers: headers })
+        .then(function (r) {
+          return r.json()
+            .catch(function () { return {}; })
+            .then(function (j) { j.__status = r.status; return j; });
+        })
         .then(function (data) {
           /* 반드시 서버가 명시적으로 성공을 말해야만 성공으로 친다.
              HTTP 200 만 보고 판단하면, 엔드포인트가 없는 정적 호스팅에서
@@ -240,6 +259,9 @@
               msg.textContent = '문의가 정상적으로 접수되었습니다. 영업일 기준 1일 내 회신드리겠습니다.';
             }
             form.reset();
+          } else if (data.__status === 429) {
+            /* 폼 서비스의 시간당 한도. 문의자 잘못이 아니므로 곧바로 메일 경로를 준다. */
+            throw new Error('접수 요청이 일시적으로 몰렸습니다.');
           } else {
             throw new Error(data.message || '전송에 실패했습니다.');
           }
